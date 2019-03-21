@@ -82,5 +82,7 @@ if test "$PHP_ACMATCHER" != "no"; then
   dnl
   dnl PHP_SUBST(ACMATCHER_SHARED_LIBADD)
 
-  PHP_NEW_EXTENSION(acmatcher, acmatcher.cpp, $ext_shared,, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
+  EXT_ACMATCHER_SOURCES="acmatcher.cpp cacheable.cpp node.cpp automation.cpp"
+
+  PHP_NEW_EXTENSION(acmatcher, $EXT_ACMATCHER_SOURCES, $ext_shared, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
 fi

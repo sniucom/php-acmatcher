@@ -39,6 +39,13 @@ ACMatcher::build('hi', 120, function () {
     ];
 });
 
+/**
+* 不是一个进程不要用add方法来增加字典
+*/
+ACMatcher::add('hi', function() {
+    return ['北京'];
+});
+
 echo "<br><br>--------------------------------<br><br>";
 
 $has = ACMatcher::match("hi", "一起盘他");
@@ -64,3 +71,7 @@ echo "当前字典hi缓存是否存在: "; var_dump(ACMatcher::has('hi'));
 echo "<br>--------------------------------<br><br>";
 
 echo "删除字典hi结果: "; var_dump(ACMatcher::destroy('hi'));
+
+echo "<br>--------------------------------<br><br>";
+
+echo "删除后字典hi缓存是否存在: "; var_dump(ACMatcher::has('hi'));

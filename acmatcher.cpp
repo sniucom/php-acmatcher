@@ -28,21 +28,27 @@
 #include <string>
 #include <iostream>
 #include <time.h>
+#include "node.h"
+#include "automation.h"
+#include "cacheable.h"
 
 extern "C"
 {
-#include "php.h"
-#include "php_ini.h"
-#include "ext/standard/info.h"
-#include "php_acmatcher.h"
+    #include "php.h"
+    #include "php_ini.h"
+    #include "ext/standard/info.h"
+    #include "php_acmatcher.h"
 };
 
 ZEND_DECLARE_MODULE_GLOBALS(acmatcher)
 
-/* True global resources - no need for thread safety here */
+/**
+ * True global resources - no need for thread safety here
+ */
 static int le_acmatcher;
 
-/* {{{ acmatcher_functions[]
+/**
+ * acmatcher_functions[]
  *
  * Every user visible function must have an entry in acmatcher_functions[].
  */
@@ -56,9 +62,9 @@ const zend_function_entry acmatcher_functions[] = {
         PHP_ME(acmatcher, destroy, NULL, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
         PHP_FE_END	/* Must be the last line in acmatcher_functions[] */
 };
-/* }}} */
 
-/* {{{ acmatcher_module_entry
+/**
+ * acmatcher_module_entry
  */
 zend_module_entry acmatcher_module_entry = {
         STANDARD_MODULE_HEADER,
@@ -72,337 +78,119 @@ zend_module_entry acmatcher_module_entry = {
         PHP_ACMATCHER_VERSION,
         STANDARD_MODULE_PROPERTIES
 };
-/* }}} */
 
 #ifdef COMPILE_DL_ACMATCHER
-#ifdef ZTS
-ZEND_TSRMLS_CACHE_DEFINE()
+    #ifdef ZTS
+        ZEND_TSRMLS_CACHE_DEFINE()
+    #endif
+    ZEND_GET_MODULE(acmatcher)
 #endif
-ZEND_GET_MODULE(acmatcher)
-#endif
-
-/* {{{ PHP_INI
- */
-/* Remove comments and fill if you need to have entries in php.ini
-PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("acmatcher.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_acmatcher_globals, acmatcher_globals)
-    STD_PHP_INI_ENTRY("acmatcher.global_string", "foobar", PHP_INI_ALL, OnUpdateString, global_string, zend_acmatcher_globals, acmatcher_globals)
-PHP_INI_END()
-*/
-/* }}} */
-
-/* Remove the following function when you have successfully modified config.m4
-   so that your module can be compiled into PHP, it exists only for testing
-   purposes. */
 
 
-/* The previous line is meant for vim and emacs, so it can correctly fold and
-   unfold functions in source code. See the corresponding marks just before
-   function definition, where the functions purpose is also documented. Please
-   follow this convention for the convenience of others editing your code.
-*/
-
-
-/* {{{ php_acmatcher_init_globals
- */
-/* Uncomment this function if you have INI entries
-static void php_acmatcher_init_globals(zend_acmatcher_globals *acmatcher_globals)
-{
-	acmatcher_globals->global_value = 0;
-	acmatcher_globals->global_string = NULL;
-}
-*/
-/* }}} */
-
-/* {{{ PHP_MINIT_FUNCTION
+/**
+ * PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(acmatcher)
 {
 	zend_class_entry ce;
 	INIT_CLASS_ENTRY(ce, "ACMatcher", acmatcher_functions);
 	acmatcher_ce = zend_register_internal_class(&ce TSRMLS_CC);
-	/* If you have INI entries, uncomment these lines
-	REGISTER_INI_ENTRIES();
-	*/
 	return SUCCESS;
 }
-/* }}} */
 
-/* {{{ PHP_MSHUTDOWN_FUNCTION
+/**
+ * PHP_MSHUTDOWN_FUNCTION
  */
 PHP_MSHUTDOWN_FUNCTION(acmatcher)
 {
-	/* uncomment this line if you have INI entries
-	UNREGISTER_INI_ENTRIES();
-	*/
 	return SUCCESS;
 }
-/* }}} */
 
-/* Remove if there's nothing to do at request start */
-/* {{{ PHP_RINIT_FUNCTION
+
+/**
+ * PHP_RINIT_FUNCTION
  */
 PHP_RINIT_FUNCTION(acmatcher)
 {
-#if defined(COMPILE_DL_ACMATCHER) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE();
-#endif
+    #if defined(COMPILE_DL_ACMATCHER) && defined(ZTS)
+	    ZEND_TSRMLS_CACHE_UPDATE();
+    #endif
 	return SUCCESS;
 }
-/* }}} */
 
-/* Remove if there's nothing to do at request end */
-/* {{{ PHP_RSHUTDOWN_FUNCTION
+/**
+ * PHP_RSHUTDOWN_FUNCTION
  */
 PHP_RSHUTDOWN_FUNCTION(acmatcher)
 {
 	return SUCCESS;
 }
-/* }}} */
 
-/* {{{ PHP_MINFO_FUNCTION
+
+/**
+ * PHP_MINFO_FUNCTION
  */
 PHP_MINFO_FUNCTION(acmatcher)
 {
 	php_info_print_table_start();
 	php_info_print_table_header(2, "ACMatcher support", "enabled");
-	php_info_print_table_header(2, "ACMatcher Version", "1.0.0");
+	php_info_print_table_header(2, "ACMatcher Version", "2.0.0");
 	php_info_print_table_end();
-
-	/* Remove comments if you have entries in php.ini
-	DISPLAY_INI_ENTRIES();
-	*/
-}
-/* }}} */
-
-
-
-/**
- * Automation类实现
- */
-Automaton::Automaton()
-{
-	root = new Node;
-	instances.push_back(root);
 }
 
-Node* Automaton::getNext(Node *current, string &character)
-{
-
-	map<string, Node*>::iterator item = current->next.find(character);
-
-	if (item != current->next.end()) {
-		return item->second;
-	}
-
-	if (current == root) {
-		return root;
-	}
-
-	return 0;
-}
-
-void Automaton::splitWord(const string &word, int &wordLength, vector<string> &characters)
-{
-	int wordSize = word.size();
-	int i = 0;
-
-	while (i < wordSize) {
-		int characterSize = 1;
-
-		if (word[i] & 0x80) {
-			char character = word[i];
-			character <<= 1;
-			do {
-				character <<= 1;
-				++characterSize;
-			} while (character & 0x80);
-		}
-
-		string subWord;
-		subWord = word.substr(i, characterSize);
-		characters.push_back(subWord);
-
-		i += characterSize;
-		++wordLength;
-
-	}
-}
-
-void Automaton::add(const string &word, zval *values)
-{
-	int wordLength = 0;
-	vector<string> characters;
-	splitWord(word, wordLength, characters);
-
-
-	Node *temp = root;
-	int i = 1;
-	// 遍历字符串
-	for (vector<string>::iterator character = characters.begin(); character != characters.end(); ++character) {
-		map<string, Node*>::iterator item = temp->next.find(*character);
-		if (item != temp->next.end()) {
-			temp = item->second;
-		} else {
-			Node *n = new Node(word, wordLength, values);
-			if (i == wordLength) instances.push_back(n);
-			temp->next.insert(make_pair(*character, n));
-			temp = n;
-			++i;
-		}
-	}
-	temp->matched = true;
-}
-
-bool Automaton::match(const string &buf)
-{
-
-	int bufLength = 0;
-	vector<string> characters;
-	splitWord(buf, bufLength, characters);
-
-	Node *temp = root;
-	// 遍历字符串
-	for (vector<string>::iterator character = characters.begin(); character != characters.end(); ++character) {
-		while (!getNext(temp, *character)) {
-			temp = temp->fail;
-		}
-		temp = getNext(temp, *character);
-
-		if (temp->matched) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
-void Automaton::search(const string &buf, map<string, Node*> &nodes)
-{
-
-	int bufLength = 0;
-	vector<string> characters;
-	splitWord(buf, bufLength, characters);
-
-	int index = 0;
-
-	Node *temp = root;
-	// 遍历字符串
-	for (vector<string>::iterator character = characters.begin(); character != characters.end(); ++character) {
-		while (!getNext(temp, *character)) {
-			temp = temp->fail;
-		}
-		temp = getNext(temp, *character);
-
-		if (temp->matched) { //如果匹配
-			map<string, Node*>::iterator nodeFind = nodes.find(*character);
-			if (nodeFind == nodes.end()) {
-				temp->repeats = 1;
-				temp->index   = index + 1 - temp->wordLength ;
-				nodes.insert(make_pair(*character, temp));
-			} else {
-				nodeFind->second->repeats += 1;
-			}
-		}
-		++ index;
-	}
-}
-
-void Automaton::build()
-{
-	queue<Node*> Q;
-
-	for (map<string, Node*>::iterator item = root->next.begin(); item != root->next.end(); ++ item) {
-		item->second->fail = root;
-		Q.push(item->second);
-	}
-
-	while (!Q.empty()) {
-		Node* temp = Q.front();
-		Q.pop();
-		for (map<string, Node*>::iterator item = temp->next.begin(); item != temp->next.end(); ++ item) {
-			string character = item->first;
-			Q.push(item->second);
-			Node  *parent = temp->fail;
-			while (!getNext(parent, character)) parent = parent->fail;
-			item->second->fail = getNext(parent, character);
-			if (!getNext(parent, character)) throw 1;
-			if (getNext(parent, character)->matched) item->second->matched = true;
-		}
-	}
-}
-
-/**
- * CacheSets类实现
- */
- CacheSets::CacheSets(string inCacheKey, long inSeconds)
- {
- 	cacheKey  = inCacheKey;
- 	seconds   = inSeconds;
-    long now  = time(0);
- 	starts    = now;
- 	ends      = now + inSeconds;
- }
-
- void CacheSets::delay(long inSeconds)
- {
- 	if (seconds != inSeconds) {
-		seconds  = inSeconds;
-		ends     = starts + inSeconds;
- 	}
- }
-
-/**
- * ACMatcher类实现
- */
 
 /**
  * 创建字典
+ * @param string  name        字典名称
+ * @param integer seconds     存储时长
+ * @param array   dictionary  字典数组
  */
 PHP_METHOD(acmatcher, build)
 {
-	// 字典名称
-	char *name;
+    // 字典名称
+    char *name;
 
-	// 字典名称长度
-	long nameLength;
+    // 字典名称长度
+    long nameLength;
 
-	// 字典缓存时间设置
-	long  seconds;
+    // 字典缓存时间设置
+    long seconds;
 
-	// 回调方法 用于字典赋值
-	zend_fcall_info callback;
+    // 回调方法 用于字典赋值
+    zend_fcall_info callback;
     zend_fcall_info_cache callbackCache;
 
-	// 取参数值
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,  "slf", &name, &nameLength, &seconds, &callback, &callbackCache) == FAILURE) {
-         php_error_docref(NULL TSRMLS_CC, E_NOTICE, "字典 '%s' 初始化失败!", name, nameLength);
-         return;
+
+    // 取参数值
+    if (zend_parse_parameters (ZEND_NUM_ARGS() TSRMLS_CC, "slf", &name, &nameLength, &seconds, &callback, &callbackCache) == FAILURE) {
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "字典 '%s' 初始化失败!", name, nameLength);
+        return;
     }
+
 
     string dictionaryName = name;
 
     long now = time(0);
 
     //获取缓存配置
-    CacheSets *cacheSets;
+    Cacheable *cacheable;
 
-    if (!ACMATCHER_G(cacheSetsList).count(dictionaryName)) { // 如果没有缓存配置则创建
-        cacheSets = new CacheSets(dictionaryName, seconds);
-        ACMATCHER_G(cacheSetsList).insert(make_pair(dictionaryName, cacheSets));
+    if (ACMATCHER_G(cacheableList).find(dictionaryName) == ACMATCHER_G(cacheableList).end()) { // 如果没有缓存配置则创建
+        cacheable = new Cacheable(dictionaryName, seconds);
+        ACMATCHER_G(cacheableList).insert(make_pair(dictionaryName, cacheable));
     } else { // 是否延时
-        cacheSets = ACMATCHER_G(cacheSetsList).find(dictionaryName)->second;
-        cacheSets->delay(seconds);
+        cacheable = ACMATCHER_G(cacheableList).find(dictionaryName)->second;
+       cacheable->delay(seconds);
     }
 
-    int automatonListCounts = ACMATCHER_G(automatonList).count(dictionaryName);
+    int automationListExist= ACMATCHER_G(automationList).find(dictionaryName) != ACMATCHER_G(automationList).end();
 
     // 如果未到缓存时间且缓存存在
-    if (now < cacheSets->ends && automatonListCounts)  return;
+    if (now<cacheable->ends && automationListExist)  return;
 
     // 缓存时间到且缓存存在， 则先删除再重建
-    if (automatonListCounts) {
-    	ACMATCHER_G(automatonList).erase(dictionaryName);
+    if (automationListExist) {
+        ACMATCHER_G(automationList).erase(ACMATCHER_G(automationList).find(dictionaryName));
     }
 
     // 获取字典
@@ -417,7 +205,7 @@ PHP_METHOD(acmatcher, build)
     result = zend_call_function(&callback, &callbackCache);
 
     if (result == FAILURE) {
-    	php_error_docref(NULL TSRMLS_CC, E_NOTICE, "字典 '%s' 初始化失败!", name, nameLength);
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "字典 '%s' 初始化失败!", name, nameLength);
         return;
     }
 
@@ -425,32 +213,31 @@ PHP_METHOD(acmatcher, build)
     zend_long index, childIndex;
     zend_string *key, *childKey;
     zval *data, *childData;
-    Automaton *automaton = new Automaton;
+    Automation *automation = new Automation;
     HashTable *child;
     HashTable *dictionaryArr = Z_ARRVAL_P(&dictionary);
+
     // 遍历字典创建Tire树
-	ZEND_HASH_FOREACH_KEY_VAL(dictionaryArr, index, key, data) {
+    ZEND_HASH_FOREACH_KEY_VAL(dictionaryArr, index, key, data) {
         ZVAL_DEREF(data);
         if (Z_TYPE_P(data) == IS_STRING) { // 如果值为字符串
-            automaton->add(Z_STRVAL_P(data), data);
-
+            automation->add(Z_STRVAL_P(data), data);
         } else if (Z_TYPE_P(data) == IS_ARRAY) { // 如果值为数组
             child = Z_ARRVAL_P(data);
             ZEND_HASH_FOREACH_KEY_VAL(child, childIndex, childKey, childData) {
                 ZVAL_DEREF(childData);
                 if (Z_TYPE_P(childData) == IS_STRING) { // 如果值为字符串
-                    automaton->add(Z_STRVAL_P(childData), data);
+                    automation->add(Z_STRVAL_P(childData), data);
                 }
-            } ZEND_HASH_FOREACH_END();
+            }ZEND_HASH_FOREACH_END();
         }
-	} ZEND_HASH_FOREACH_END();
+    }ZEND_HASH_FOREACH_END();
 
-	automaton->build();
+    automation->build();
 
-	ACMATCHER_G(automatonList).insert(make_pair(name, automaton));
+    ACMATCHER_G(automationList).insert(make_pair(name, automation));
 
     return;
-
 }
 
 
@@ -459,7 +246,69 @@ PHP_METHOD(acmatcher, build)
  */
 PHP_METHOD(acmatcher, add)
 {
-    php_printf("预留方法");
+    // 字典名称
+    char *name;
+
+    // 字典名称长度
+    long nameLength;
+
+    // 回调方法 用于字典赋值
+    zend_fcall_info callback;
+    zend_fcall_info_cache callbackCache;
+
+    // 取参数值
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,  "sf", &name, &nameLength, &callback, &callbackCache) == FAILURE) {
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "向字典 '%s' 添加新关键词失败!", name, nameLength);
+        return;
+    }
+
+    string dictionaryName = name;
+
+    // 获取字典
+    zval dictionary;
+    callback.retval = &dictionary;
+    Z_TRY_ADDREF(callback.function_name);
+    callback.param_count = 0;
+    callback.no_separation = 1;
+
+    // 回调闭包
+    int result;
+    result = zend_call_function(&callback, &callbackCache);
+
+
+    // 字典不存在
+    if (ACMATCHER_G(automationList).find(dictionaryName) == ACMATCHER_G(automationList).end()) {
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "字典 '%s' 尚未创建,无法添加新关键词!", name, nameLength);
+    }
+
+    zend_long index, childIndex;
+    zend_string *key, *childKey;
+    zval *data, *childData;
+    Automation *automation = ACMATCHER_G(automationList).find(dictionaryName)->second;
+    HashTable *child;
+    HashTable *dictionaryArr = Z_ARRVAL_P(&dictionary);
+
+    // 遍历字典创建Tire树
+    ZEND_HASH_FOREACH_KEY_VAL(dictionaryArr, index, key, data) {
+        ZVAL_DEREF(data);
+        if (Z_TYPE_P(data) == IS_STRING) { // 如果值为字符串
+            automation->add(Z_STRVAL_P(data), data);
+        } else if (Z_TYPE_P(data) == IS_ARRAY) { // 如果值为数组
+            child = Z_ARRVAL_P(data);
+            ZEND_HASH_FOREACH_KEY_VAL(child, childIndex, childKey, childData) {
+                ZVAL_DEREF(childData);
+                if (Z_TYPE_P(childData) == IS_STRING) { // 如果值为字符串
+                    automation->add(Z_STRVAL_P(childData), data);
+                }
+            } ZEND_HASH_FOREACH_END();
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    automation->build();
+
+    ACMATCHER_G(automationList).insert(make_pair(name, automation));
+
+    return;
 }
 
 /**
@@ -480,13 +329,13 @@ PHP_METHOD(acmatcher, match)
     string dictionaryName = name;
     string bufs = buf;
 
-    if (!ACMATCHER_G(automatonList).count(dictionaryName)) {
-        RETURN_FALSE;
+    if (ACMATCHER_G(automationList).find(dictionaryName) == ACMATCHER_G(automationList).end()) {
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "字典 '%s' 尚未创建!", name, nameLength);
     }
 
-    Automaton *automaton;
-    automaton = ACMATCHER_G(automatonList).find(dictionaryName)->second;
-    if (!automaton->match(bufs)) {
+    Automation *automation;
+    automation = ACMATCHER_G(automationList).find(dictionaryName)->second;
+    if (!automation->match(bufs)) {
     	RETURN_FALSE;
     }
 
@@ -514,16 +363,15 @@ PHP_METHOD(acmatcher, search)
     string dictionaryName = name;
     string bufs = buf;
 
-    if (!ACMATCHER_G(automatonList).count(dictionaryName)) {
-    	php_printf("未找到字段");
-    	return;
+    if (ACMATCHER_G(automationList).find(dictionaryName) == ACMATCHER_G(automationList).end()) {
+        php_error_docref(NULL TSRMLS_CC, E_ERROR, "字典 '%s' 尚未创建!", name, nameLength);
     }
 
-    Automaton *automaton;
-    automaton = ACMATCHER_G(automatonList).find(dictionaryName)->second;
+    Automation *automation;
+    automation = ACMATCHER_G(automationList).find(dictionaryName)->second;
 
     map<string, Node*> nodes;
-    automaton->search(bufs, nodes);
+    automation->search(bufs, nodes);
 
     int counts = nodes.size();
 
@@ -566,11 +414,11 @@ PHP_METHOD(acmatcher, has)
 
     string dictionaryName = name;
 
-    if (!ACMATCHER_G(automatonList).count(dictionaryName)) {
-        RETURN_FALSE;
+    if (ACMATCHER_G(automationList).find(dictionaryName) != ACMATCHER_G(automationList).end()) {
+        RETURN_TRUE;
     }
 
-    RETURN_TRUE;
+    RETURN_FALSE;
 }
 
 /**
@@ -596,23 +444,23 @@ PHP_METHOD(acmatcher, print)
     string dictionaryName = name;
 
     // 打印字典缓存设置
-    int cacheSetCount = ACMATCHER_G(cacheSetsList).count(dictionaryName);
-    if (cacheSetCount) {
+    int cacheableCount = ACMATCHER_G(cacheableList).count(dictionaryName);
+    if (cacheableCount) {
         php_printf("缓存信息:<br>");
-        CacheSets *cacheSet = ACMATCHER_G(cacheSetsList).find(dictionaryName)->second;
-        php_printf("缓存开始时间戳: %d <br/>", cacheSet->starts);
-        php_printf("缓存时长: %d 秒 <br/>", cacheSet->seconds);
-        php_printf("缓存结束时间戳: %d <br/><br>", cacheSet->ends);
+        Cacheable *cacheable = ACMATCHER_G(cacheableList).find(dictionaryName)->second;
+        php_printf("缓存开始时间戳: %d <br/>", cacheable->starts);
+        php_printf("缓存时长: %d 秒 <br/>", cacheable->seconds);
+        php_printf("缓存结束时间戳: %d <br/><br>", cacheable->ends);
     }
 
     // 打印字典
-    int automatonCount = ACMATCHER_G(automatonList).count(dictionaryName);
-    if (automatonCount) {
+    int automationCount = ACMATCHER_G(automationList).count(dictionaryName);
+    if (automationCount) {
         php_printf("字典信息:<br>");
         int n = 0;
-        Automaton *automaton;
-        automaton = ACMATCHER_G(automatonList).find(dictionaryName)->second;
-        for (vector<Node*>::iterator node = automaton->instances.begin(); node != automaton->instances.end(); ++node ) {
+        Automation *automation;
+        automation = ACMATCHER_G(automationList).find(dictionaryName)->second;
+        for (vector<Node*>::iterator node = automation->instances.begin(); node != automation->instances.end(); ++node ) {
         	if ((*node)->word != "") {
                 php_printf("%d. %s <br>", ++n, (*node)->word.c_str());
         	}
@@ -628,29 +476,29 @@ PHP_METHOD(acmatcher, destroy)
     char  *name;
     long   nameLength;
 
-    string dictionaryName = name;
-
     // 取参数值
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &name, &nameLength) == FAILURE) {
         RETURN_FALSE;
     }
 
-    if (ACMATCHER_G(automatonList).count(dictionaryName)) {
-        ACMATCHER_G(automatonList).erase(dictionaryName);
+    string dictionaryName = name;
+
+    if (ACMATCHER_G(automationList).find(dictionaryName) != ACMATCHER_G(automationList).end()) {
+        map<string, Automation*>::iterator automation = ACMATCHER_G(automationList).find(dictionaryName);
+        delete automation->second;
+        ACMATCHER_G(automationList).erase(automation);
     }
 
-    if (ACMATCHER_G(automatonList).count(dictionaryName)) {
-        RETURN_FALSE;
+    if (ACMATCHER_G(cacheableList).find(dictionaryName) == ACMATCHER_G(cacheableList).end()) {
+        map<string, Cacheable*>::iterator cacheable = ACMATCHER_G(cacheableList).find(dictionaryName);
+        delete cacheable->second;
+        ACMATCHER_G(cacheableList).erase(cacheable);
     }
 
-    RETURN_TRUE;
+
+    if (ACMATCHER_G(automationList).find(dictionaryName) == ACMATCHER_G(automationList).end()) {
+        RETURN_TRUE;
+    }
+
+    RETURN_FALSE;
 }
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: noet sw=4 ts=4 fdm=marker
- * vim<600: noet sw=4 ts=4
- */
